@@ -1,0 +1,1 @@
+This folder is used for runtime which is combined from all tables of the database

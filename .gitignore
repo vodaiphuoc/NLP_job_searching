@@ -1,3 +1,6 @@
 myenv/
 env/
 *test.*
+data_folder/*/*/*/
+*.pdf
+*.png
