@@ -49,7 +49,7 @@ class Compute_Assign_Score(Action_base):
             engine.create_table(table_name_list= ["resume","jobpost","score"])
 
             # Resume data
-            demo_data = pd.read_csv("data_folder\demo_data\livecareer_resume_dataset\Resume\Resume.csv")
+            demo_data = pd.read_csv("demo_data\livecareer_resume_dataset\Resume\Resume.csv")
             filter_data = demo_data["Resume_str"]
             results = [filter_data.iat[row_id]
                     for row_id in range(len(filter_data))]
@@ -62,7 +62,7 @@ class Compute_Assign_Score(Action_base):
                     for content in results]
             engine.insert(target_table= "resume", insertion_data= results)
 
-            
+
         else:
             raise NotImplemented
 
@@ -92,17 +92,3 @@ class Compute_Assign_Score(Action_base):
             print(sentence1)
             for idx_j, sentence2 in enumerate(sentences2):
                 print(f" - {sentence2: <30}: {similarities[idx_i][idx_j]:.4f}")
-
-
-
-# def login():
-#     """
-#     action_id, 
-#     """
-#     query = "insert"
-
-#     db.excute
-
-#     "for admin"
-#     config = {} #< admin input, save to string
-#     training(config)

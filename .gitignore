@@ -4,3 +4,4 @@ test*.*
 data_folder/demo_data/livecareer_resume_dataset/data/*
 *.pdf
 *.png
+*/__pycache__/
