@@ -1,5 +1,7 @@
 from sentence_transformers import SentenceTransformer
 from typing import Literal
+from src.database import DB_Handling
+import pandas as pd
 
 class Action_base(object):
     """
@@ -16,7 +18,6 @@ class Action_base(object):
         else:
             raise NotImplemented
         # create connection to DB
-
 
 class Training_Model(Action_base):
     def __init__(self,
@@ -39,6 +40,31 @@ class Compute_Assign_Score(Action_base):
                  model_name: str
                  ) -> None:
         super().__init__(runing_mode, training_type, model_name)
+    
+    def _prepare_dataset(self, data_path:str = None):
+        if self.running_mode == "demo":
+            assert data_path is not None, "Demo purpose required external data source"
+            engine = DB_Handling()
+            # create tables
+            engine.create_table(table_name_list= ["resume","jobpost","score"])
+
+            # Resume data
+            demo_data = pd.read_csv("data_folder\demo_data\livecareer_resume_dataset\Resume\Resume.csv")
+            filter_data = demo_data["Resume_str"]
+            results = [filter_data.iat[row_id]
+                    for row_id in range(len(filter_data))]
+
+            # cleaning for correct format
+            results = [(" ".join([ele.lower().replace("\n","") 
+                                    for ele in content.split(" ") 
+                                    if ele != ""
+                                    ]))
+                    for content in results]
+            engine.insert(target_table= "resume", insertion_data= results)
+
+            
+        else:
+            raise NotImplemented
 
     def compute_and_assign_score(self):
         # Two lists of sentences

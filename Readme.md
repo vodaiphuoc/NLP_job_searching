@@ -134,3 +134,13 @@ def create(field_name:str, unique_values: List[str]):
 		- when user input (JobPostID for recruiters or userId for job seekers), perform search in table "Sim_score" table to archive
 		top-k highest similarity score
 
+## psql command
+1) \? list all the commands
+2) \l list databases
+3) \conninfo display information about current connection
+4) \c [DBNAME] connect to new database, e.g., \c template1
+5) \dt list tables of the public schema
+6) \dt <schema-name>.* list tables of certain schema, e.g., \dt public.*
+7) \dt *.* list tables of all schemas
+8) Then you can run SQL statements, e.g., SELECT * FROM my_table;(Note: a statement must be terminated with semicolon ;)
+9) \q quit psql
