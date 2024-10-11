@@ -1,1 +1,0 @@
-This folder is used for containing data crawl from jobsgo.vn

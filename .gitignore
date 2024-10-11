@@ -1,7 +1,12 @@
 myenv/
 env/
 test*.*
-data_folder/demo_data/livecareer_resume_dataset/data/*
+demo_data/livecareer_resume_dataset/data/*
+demo_data/livecareer_resume_dataset/*.csv
+demo_data/linkedjobs/*/*
+demo_data/linkedjobs/*.csv
 *.pdf
 *.png
 */__pycache__/
+docs/
+colum_csv/
