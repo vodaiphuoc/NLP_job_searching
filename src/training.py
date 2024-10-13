@@ -1,27 +1,38 @@
 from sentence_transformers import SentenceTransformer
-from typing import Literal
+from typing import Literal, Dict, List, Union
 
 import torch.utils
-from src.database import DB_Handling
+from src.database import Query2MainDB
 import pandas as pd
 import torch
 
 class Database2Dataset(torch.utils.data.Dataset):
-    """Dataset for SELECT query only"""
+    """Dataset/Dataloader for SELECT query only"""
     def __init__(self, 
                  config_file_path:str, 
-                 section: str, 
-                 batch_size:int
+                 section: str,
                  )->None:
-
-        self.db_handling = DB_Handling(config_file_path=config_file_path, 
+        
+        self.db_handling = Query2MainDB(config_file_path=config_file_path, 
                                   section= section)
-        
+        self.id_pairs = self.db_handling.get_available_activity()
+        assert isinstance(self.id_pairs,list), "Cannot query to DB, JobPostActivity table"
+
     def __len__(self):
-        """Must base on JobPostActivity with JobPostId and CVId"""
-        
+        """Must base on JobPostActivity with JobPostId and UserId"""
+        return len(self.id_pairs)
 
+    def __getitem__(self, index:int)->tuple[int,str]:
+        current_ids = self.id_pairs[index]
+    
+        query_data = self.db_handling.query(jobpost_id= current_ids['JobPostId'],
+                                            user_id=current_ids['UserId'])
 
+        return (current_ids['UserId'], 
+                current_ids['JobPostId'],
+                query_data['resume'],
+                query_data['jobpost']
+            )
 
 class Action_base(object):
     """
@@ -29,86 +40,49 @@ class Action_base(object):
     """
     def __init__(self,
                  runing_mode: Literal["demo", "production"],
-                 training_type: Literal["pretrained","fine_tuning"],
+                 model_type: Literal["pretrained","fine_tuning"],
                  model_name: str = "all-MiniLM-L6-v2"
                  ) -> None:
         self.running_mode = runing_mode
-        if training_type == "pretrained":
+        if model_type == "pretrained":
             self.model = SentenceTransformer(model_name)
         else:
             raise NotImplemented
         # create connection to DB
 
-class Training_Model(Action_base):
-    def __init__(self,
-                 runing_mode: str,
-                 training_type: str,
-                 model_name: str
-                 ) -> None:
-        super().__init__(runing_mode, training_type, model_name)
-        
-    def _prepare_dataset(self):
-        pass
-        
-    def start_training(self):
-        pass
-
 class Compute_Assign_Score(Action_base):
     def __init__(self,
                  runing_mode: str,
-                 training_type: str,
-                 model_name: str
+                 model_type: str,
+                 model_name: str,
+                 db_config_file_path:str, 
+                 section: str,
+                 batch_size:int,
                  ) -> None:
-        super().__init__(runing_mode, training_type, model_name)
-    
-    def _prepare_dataset(self, data_path:str = None):
-        if self.running_mode == "demo":
-            assert data_path is not None, "Demo purpose required external data source"
-            engine = DB_Handling()
-            # create tables
-            engine.create_tables(table_name_list= ["resume","jobpost","score"])
+        super().__init__(runing_mode, model_type, model_name)
 
-            ##### Resume data #####
-            demo_data = pd.read_csv("demo_data\livecareer_resume_dataset\Resume\Resume.csv")
-            filter_data = demo_data["Resume_str"]
-            results = [filter_data.iat[row_id]
-                    for row_id in range(len(filter_data))]
-
-            # cleaning for correct format
-            results = [(" ".join([ele.lower().replace("\n","")
-                                    for ele in content.split(" ") 
-                                    if ele != ""
-                                    ]))
-                    for content in results]
-            engine.insert(target_table= "resume", insertion_data= results)
-
-
-        else:
-            raise NotImplemented
+        dataset = Database2Dataset(db_config_file_path, section)
+        self.loader = torch.utils.data.DataLoader(dataset, batch_size = batch_size)
+        self.batch_size = batch_size
 
     def compute_and_assign_score(self):
-        # Two lists of sentences
-        sentences1 = [
-            "The new movie is awesome",
-            "The cat sits outside",
-            "A man is playing guitar",
-        ]
+        score_output: List[Dict[str,Union[int,float]]] = []
 
-        sentences2 = [
-            "The dog plays in the garden",
-            "The new movie is so great",
-            "A woman watches TV",
-        ]
+        for batch_userId, batch_jobpostId, batch_resume, batch_jobpost in self.loader:
+            # Compute embeddings for both lists
+            resume_embeddings = self.model.encode(batch_resume)
+            jobpost_embeddings = self.model.encode(batch_jobpost)
 
-        # Compute embeddings for both lists
-        embeddings1 = self.model.encode(sentences1)
-        embeddings2 = self.model.encode(sentences2)
+            # Compute cosine similarities
+            similarities = self.model.similarity(resume_embeddings, jobpost_embeddings)
+            assert similarities.shape[0] == self.batch_size, similarities.shape[1] == self.batch_size
+            
+            
+            batch_score= [{'UserId':batch_userId[idx],
+                 'JobPostId': batch_jobpostId[idx],
+                 'Score': similarities[idx][idx]
+                 } for idx in range(self.batch_size)]
 
-        # Compute cosine similarities
-        similarities = self.model.similarity(embeddings1, embeddings2)
-
-        # Output the pairs with their score
-        for idx_i, sentence1 in enumerate(sentences1):
-            print(sentence1)
-            for idx_j, sentence2 in enumerate(sentences2):
-                print(f" - {sentence2: <30}: {similarities[idx_i][idx_j]:.4f}")
+            score_output.extend(batch_score)
+        
+        

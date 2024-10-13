@@ -2,6 +2,15 @@ from configparser import ConfigParser
 from typing import Dict, Literal, List, Tuple, Union, Any
 import psycopg2
 from datetime import datetime, timedelta
+from tqdm import tqdm
+import random
+
+TABLE_NAMES = Literal["Users", "SkillSets", "SeekerSkillSets", "JobTypes",
+                    "JobSkillSets", "JobPosts", "JobPostActivitys", "JobLocations", 
+                    "Position_Summary_Achievements", "ExperienceDetails",
+                    "TempEducationDetails", "Companys"
+                    ]
+    
 
 class DB_Handling_Base(object):
     def __init__(self, 
@@ -33,88 +42,168 @@ class DB_Handling_Base(object):
         cur = conn.cursor()
         return conn, cur
 
-class TestDB_Handling(DB_Handling_Base):
-    def __init__(self, config_file_path: str = "src/db.ini", section: str = "demo") -> None:
+class Query2MainDB(DB_Handling_Base):
+    def __init__(self, 
+                 config_file_path: str = "src/db.ini", 
+                 section: str = "local") -> None:
         super().__init__(config_file_path, section)
-    
-    # create tables
-    def create_tables(self, table_name_list: List[Literal["resume", "jobpost","score"]])->None:
-        """
-        Primary key is set to type SERIAL so it can auto-increase
-        """
+        self.jobpost_field_list = ["Job Title", "Job Description","Experience Required", 
+                                    "Qualification Required", "Benefits",
+                                    "Job Type", "CompanyName","City","Country"]
+        
+        self.resume_field_list = ["ApplyPosition", "Summary", "Achievements", 
+                                    "Description","SkillDescription"]
+        
+
+    def _query_jobpost(self, 
+                      jobpost_id:int,
+                      )->Union[bool,str]:
         conn, cur = self._get_cursor_and_connection()
-        for table_name in table_name_list:
-            try:    
-                prim_key_col_name = "CV_Id" if table_name == "resume" else "JobPostId" if table_name == "jobpost" else "Id"
-                information = "information VARCHAR(39000)" if table_name != "id" else ""
-                cv_job = ", CV_Id INTEGER, JobPostId INTEGER" if table_name =="id" else ""
-                query = f"CREATE TABLE IF NOT EXISTS {table_name} ({prim_key_col_name} SERIAL PRIMARY KEY,{information}{cv_job});"
-                cur.execute(query)
-            except:
-                print(f"Can't create {table_name} table in the database!")
+        
+        # get jobpost information
+        try:
+            jobpost_query = """
+                SELECT JP."JobTitle", JP."JobDescription",JP."ExperienceRequired", 
+                        JP."QualificationRequired", JP."Benefits",
+                        JT."Name", CPN."CompanyName",JL."City",JL."Country"
+                FROM public."JobPosts" AS JP
+                INNER JOIN public."JobTypes" as JT ON JP."JobTypeId" = JT."Id"
+                INNER JOIN public."Companys" as CPN ON JP."CompanyId" = CPN."Id"
+                INNER JOIN public."JobLocations" as JL ON JP."JobLocationId" = JL."Id"
+                WHERE JP."Id" = '{}'
+                """.format(jobpost_id)
+            
+            cur.execute(jobpost_query)
+            jobpost_data = cur.fetchall()
+            assert len(jobpost_data) == 1, f"Found length of {jobpost_data} = {len(jobpost_data)}"
+        
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't select for jobpost.Error: {error}")
+            jobpost_data = None
+        
+        # get skill
+        try:
+            job_skill_query = """
+                SELECT SKS."Name"
+                FROM public."JobSkillSets" AS JSK
+                INNER JOIN public."SkillSets" as SKS ON JSK."SkillSetId" = SKS."Id"
+                WHERE JSK."JobPostId" = '{}'
+                """.format(jobpost_id)
+            cur.execute(job_skill_query)
+            job_skill_data = cur.fetchall()
+            str_job_skills = ",".join([skill[0] for skill in job_skill_data]) # flatten
+        
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't select for jobpost.Error: {error}")
+            str_job_skills = None
 
         conn.commit()
         conn.close()
         cur.close()
 
-    # insert data
-    def insert(self, 
-               target_table: Literal["resume", "jobpost", "score"],
-               insertion_data: List[Tuple[str]],
-               insert_batch_size = 1000
-               )->None:
-        """
-        Insert many data into the database
-        Example of `insertion_data`: [("some_string", ),("another string",)]
-        Expect data in `insert_batch_size` is cleaned.
-        """
-        conn, cur = self._get_cursor_and_connection()
+        if jobpost_data is not None and str_job_skills is not None:
+            job_post_dict = {}
+            for ith, k in enumerate(self.jobpost_field_list):
+                job_post_dict[k] = jobpost_data[0][ith]
+            job_post_dict['Skills'] = str_job_skills
 
-        # check if is correct type List of Tuple or not
-        if not isinstance(insertion_data[0], Tuple):
-            insertion_data = [(data,) for data in insertion_data]
+            # formating
+            return '\n'.join([k+':\n'+v+'\n' for k, v in job_post_dict.items()])
 
-        # split data into smaller chunks
-        if len(insertion_data) > insert_batch_size:
-            num_batch = len(insertion_data)//insert_batch_size
-            batchs = [insertion_data[batch_id*insert_batch_size: (batch_id+1)*insert_batch_size] 
-                        for batch_id in range(num_batch)
-                        ]
-
-        # branch for `resume` and `jobpost` table
-        if target_table != "score":
-            for batch in batchs:
-                try:
-                    query = f"INSERT INTO {target_table} (information) VALUES (%s);"
-                    cur.executemany(query, batch)
-                except:
-                    print(f"Can't insert many into {target_table} table in the database!")
-        
-        # branch for `resume` and `jobpost` table
         else:
-            for batch in batchs:
-                try:
-                    query = f"INSERT INTO {target_table} (CV_Id, JobPostId) VALUES (%s);"
-                    cur.executemany(query, batch)
-                except:
-                    print(f"Can't insert many into {target_table} table in the database!")
+            return False
 
-        conn.commit()
-        conn.close()
-        cur.close()
-
-    def delete_tabel(self,target_table: Literal["resume", "jobpost", "score"]):
+    def _query_resume(self, 
+                      user_id:int
+                      )->Dict[str,str]:
         conn, cur = self._get_cursor_and_connection()
+
+        # get other information
+        try:
+            resume_query = """
+                SELECT PSA."ApplyPosition", PSA."Summary", PSA."Achievements", 
+                        EDU."Description", SSK."SkillDescription"
+                FROM public."Position_Summary_Achievements" AS PSA
+                INNER JOIN public."TempEducationDetails" AS EDU ON PSA."UserId" = EDU."UserId"
+                INNER JOIN public."SeekerSkillSets" AS SSK ON PSA."UserId" = SSK."UserId"
+                WHERE PSA."UserId" = '{}'
+                LIMIT 1
+                """.format(user_id)
+            
+            cur.execute(resume_query)
+            resume_data = cur.fetchall()
         
-        query = f"DROP TABLE {target_table}"
-        cur.execute(query)
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't select for resume. Error: {error}")
+            resume_data = None
+
+        # get experiments
+        try:
+            exp_query = """
+                SELECT EXP."CompanyName", EXP."Position", EXP."Responsibilities"
+                FROM public."Users" AS US
+                INNER JOIN public."ExperienceDetails" AS EXP ON US."Id" = EXP."UserId"
+                WHERE Us."Id" = '{}'
+                """.format(user_id)
+            
+            cur.execute(exp_query)
+            resume_exp = cur.fetchall()
+            resume_exp = ",".join(["""CompanyName: {},\n
+                                    Position: {},\n
+                                    Responsibilities: {}\n
+                                   """.format(each_[0].replace("\n",''),
+                                              each_[1].replace("\n",''),
+                                              each_[2].replace("\n",''))
+                                   for each_ in resume_exp])
+            resume_exp = " ".join([ele for ele in resume_exp.split(" ") if ele != ""])
+        
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't select for experience. Error: {error}")
+            resume_exp = None
 
         conn.commit()
         conn.close()
         cur.close()
 
-    # def select(self, target_table:str, target_colums: List[str]):
+        if resume_data is not None and resume_exp is not None:
+            resume_dict = {}
+            for ith, k in enumerate(self.resume_field_list):
+                resume_dict[k] = resume_data[0][ith]
+            resume_dict['Experiences'] = resume_exp
+            
+            # formating
+            return '\n'.join([k+':\n'+v+'\n' for k, v in resume_dict.items()])
 
+
+        else:
+            return False
+    
+    def query(self, jobpost_id:int, user_id: int)->Dict[str,str]:
+        """Query a jobpost and a resume"""
+        jobpost_data =  self._query_jobpost(jobpost_id= jobpost_id)
+        resume_data = self._query_resume(user_id= user_id)
+
+        return {'jobpost':jobpost_data,'resume':resume_data}
+    
+
+    def get_available_activity(self)->Union[bool, List[Dict[str,int]]]:
+        conn, cur = self._get_cursor_and_connection()
+        # get list available jobpost_id and user_id
+        activity_query = """SELECT "UserId", "JobPostId" FROM public."JobPostActivitys" """
+        try:
+            cur.execute(activity_query)
+            pair_id_list = cur.fetchall()
+            pair_id_list = [{'UserId':int(id[0]), 
+                             'JobPostId': int(id[1])} 
+                             for id in pair_id_list
+                             ]
+            conn.commit()
+            conn.close()
+            cur.close()
+            return pair_id_list
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't select JobPostActivitys table in the database!", error)
+            return False
 
 class InsertMany2MainDB(DB_Handling_Base):
     def __init__(self,
@@ -215,6 +304,7 @@ class InsertMany2MainDB(DB_Handling_Base):
 
     def insertJobTypes(self)->None:
         """
+        Insert many into 'JobTypes' table (parent table)
         Possible for JobType is: 'Intern', 'Temporary', 'Full-Time', 
         'Contract', 'Part-Time'
         """
@@ -241,7 +331,7 @@ class InsertMany2MainDB(DB_Handling_Base):
 
     def insertSkillSets(self, input_data: List[str])->None:
         """
-        Insert many into 'SkillSets' table
+        Insert many into 'SkillSets' table (parent table)
         Arg:
             - input_data: List of Tuple of str
         Exmaple: [(skill_1), (skill_2), ...]
@@ -264,7 +354,7 @@ class InsertMany2MainDB(DB_Handling_Base):
 
     def insertJobPosts(self, input_data: List[Dict[str,Any]])->None:
         """
-        Insert many into 'JobPosts' table
+        Insert many into 'JobPosts' table (child table)
         Arg:
             - input_data: List of Tuple of str
         Exmaple: [{'JobTitle':..., 'JobDescription':..., 'Salary':..., 'PostingDate':..., 
@@ -293,18 +383,29 @@ class InsertMany2MainDB(DB_Handling_Base):
                                                             "SkillLevelRequired", "Benefits", "IsActive",
                                                             "JobTypeId", "CompanyId", "JobLocationId",
                                                             "IsDeleted")
-                        VALUES ('{}','{}','{}', '{}','{}','{}','{}', 3,'{}','t','{}','{}','{}','f');
+                        VALUES ('{}','{}','{}', '{}','{}','{}','{}', 3,'{}','t',
+                                (SELECT "Id" FROM public."JobTypes" AS JT
+                                WHERE JT."Name" = '{}'),
+                                (SELECT "Id" FROM public."Companys" AS CO
+                                WHERE CO."CompanyName" = '{}'),
+                                (SELECT "Id" FROM public."JobLocations" AS JL
+                                WHERE JL."City" = '{}'
+                                AND JL."Country" = '{}'
+                                ),'f');
                                 """.format(data["Job Title"], data["Job Description"],
                                         data["Salary Range"],
                                         datetime.strptime(data["Job Posting Date"], "%Y-%m-%d"),
                                         datetime.now() + timedelta(days= 45),
                                         data["Experience"],data["Qualifications"], data["Benefits"],
-                                        data["Work Type Id"], data["Company Id"], data["JobLocation Id"]
+                                        data["Work Type"], 
+                                        data["Company"], 
+                                        data["location"],data["Country"]
                                         )
 
                 cur.execute(insert_query)
             except (psycopg2.DatabaseError, Exception) as error:
                 print(f"Can't insert many into JobPosts table in the database! Error: ",error)
+                break
             
         conn.commit()
         conn.close()
@@ -322,13 +423,19 @@ class InsertMany2MainDB(DB_Handling_Base):
         Exmaple: [(JobPostId_1,SkillSetId_1), (JobPostId_2,SkillSetId_2), ...]
         """
         conn, cur = self._get_cursor_and_connection()
-        try:
-            input_data = [(data["JobPostId"], data["SkillSetId"],"f") for data in input_data]
-            query = f'INSERT INTO public."JobSkillSets" ("JobPostId", "SkillSetId","IsDeleted") \
-                        VALUES (%s,%s,%s);'
-            cur.executemany(query, input_data)
-        except (psycopg2.DatabaseError, Exception) as error:
-            print(f"Can't insert many into JobSkillSets table in the database!", error)
+        for data in tqdm(input_data, total=len(input_data)):
+            try:
+                query = """INSERT INTO public."JobSkillSets" ("JobPostId", "SkillSetId","IsDeleted") \
+                            VALUES (
+                            (SELECT "Id" FROM public."JobPosts" 
+                            WHERE  public."JobPosts"."Id" = '{}'),
+                            (SELECT "Id" FROM public."SkillSets" 
+                            WHERE  public."SkillSets"."Id" = '{}'),
+                            'f');""".format(data["JobPostId"], data["SkillSetId"])
+                cur.execute(query)
+            except (psycopg2.DatabaseError, Exception) as error:
+                print(f"Can't insert many into JobSkillSets table in the database!", error)
+                break
         
         conn.commit()
         conn.close()
@@ -338,98 +445,208 @@ class InsertMany2MainDB(DB_Handling_Base):
 
 
 # # related to Resume
-# def insertUsers():
+    def insertUsers(self, input_data: List[str]):
+        """
+        Role value is equal 2 for who post CV
+        """
+        conn, cur = self._get_cursor_and_connection()
 
-# {
-#     "Id":,
-#     "UserName":,
-#     "PasswordHash":,
-#     "PasswordSalt":,
-#     "FirstName":,
-#     "LastName":,
-#     "Email":,
-#     "PhoneNumber":,
-#     "Role":,
-#     "CompanyId":,
-#     "CreatedDate":,
-#     "ModifiedDate":,	
-#     "CreatedBy":,
-#     "ModifiedBy":,
-#     "IsDeleted":,
-# }
+        try:
+            input_data = [(name,2,"f") for name in input_data]
+            query = 'INSERT INTO public."Users" ("UserName","Role","IsDeleted") VALUES (%s,%s,%s);'
+            cur.executemany(query, input_data)
+            conn.commit()
+            conn.close()
+            cur.close()
+            print("Done insertUsers")
 
-# def insertEducationDetail():
-# {
-#     "Id":,	
-#     "Name":,	
-#     "InstitutionName":,
-#     "Degree":,
-#     "FieldOfStudy":,
-#     "StartDate":,
-#     "EndDate":,
-#     "GPA":,
-#     "UserId":,	
-#     "CreatedDate":,
-#     "ModifiedDate":,
-#     "CreatedBy":,
-#     "ModifiedBy":,
-#     "IsDeleted":,
-# }
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't insert many into Users table in the database!", error)
+        return None
 
 
+    def insertEducationDetail(self,input_data: List[Dict[str, Any]]):
+        """For demo only, will use TempEducationDetails table"""
+        conn, cur = self._get_cursor_and_connection()
+        for data in input_data:
+            try:
+                query = """INSERT INTO public."TempEducationDetails" ("Description","UserId","IsDeleted") 
+                            VALUES (
+                            ('{}'),
+                            (SELECT "Id" FROM public."Users"
+                            WHERE public."Users"."Id" = '{}'),
+                            'f');""".format(data["Description"].replace("'","''") 
+                                            if isinstance(data["Description"],str) 
+                                            else data["Description"]
+                                            ,data["UserId"])
+                cur.execute(query)
 
-# def insertCVs():
+            except (psycopg2.DatabaseError, Exception) as error:
+                print(f"Can't insert many into TempEducationDetails table in the database!", error)
+                break
+        
+        conn.commit()
+        conn.close()
+        cur.close()
+        print("Done insertEducationDetail")
+        return None
 
-#     {
-#         "Id":,
-#         "Url":,
-#         "UserId":,
-#     }
+    def insertExperienceDetail(self,input_data: List[Dict[str, Any]]):
+        conn, cur = self._get_cursor_and_connection()
+
+        for data in input_data:
+            for k,v in data.items():
+                if isinstance(v,str):
+                    if "'" in v:
+                        data[k] = v.replace("'","''")
+
+        for data in input_data:
+            try:
+                query = """INSERT INTO public."ExperienceDetails" ("CompanyName","Position",
+                                                                    "StartDate","EndDate", 
+                                                                    "Responsibilities", "Achievements",
+                                                                    "UserId","IsDeleted")
+                                        VALUES ('{}','{}','{}','{}','{}','{}',
+                                        (SELECT "Id" FROM public."Users"
+                                        WHERE public."Users"."Id" = '{}'),
+                                        'f');""".format(data["CompanyName"], data["Position"],
+                                                          data["StartDate"], data["EndDate"],
+                                                          data["Responsibilities"], data["Achievements"],
+                                                          data["UserId"]
+                                                          )
+                cur.execute(query)
+
+            except (psycopg2.DatabaseError, Exception) as error:
+                print(f"Can't insert many into ExperienceDetails table in the database!", error)
+                break
+        
+        conn.commit()
+        conn.close()
+        cur.close()
+        print("Done insertExperienceDetail")
+        return None
 
 
+    def insertSeekerSkillSet(self, input_data: List[Dict[str, Any]]):
+        conn, cur = self._get_cursor_and_connection()
 
-# def insertExperienceDetail():
-#     {
-#         "Id":,	
-#         "CompanyName":,
-#         "Position":,
-#         "StartDate":,
-#         "EndDate":,	
-#         "Responsibilities":,
-#         "Achievements":,	
-#         "UserId":,
-#         "CreatedDate":,
-#         "ModifiedDate":,
-#         "CreatedBy":,
-#         "ModifiedBy":,	
-#         "IsDeleted":,
-#     }
+        for data in input_data:
+            for k,v in data.items():
+                if isinstance(v,str):
+                    if "'" in v:
+                        data[k] = v.replace("'","''")
+
+        for data in input_data:
+            try:
+                query = """INSERT INTO public."SeekerSkillSets" ("ProficiencyLevel","UserId",
+                                                                    "SkillDescription","IsDeleted")
+                                        VALUES (1,
+                                        (SELECT "Id" FROM public."Users"
+                                        WHERE public."Users"."Id" = '{}'),
+                                        '{}',
+                                        'f');""".format(data["UserId"], 
+                                                        data["SkillDescription"].replace("'","''")
+                                                        )
+                cur.execute(query)
+                
+            except (psycopg2.DatabaseError, Exception) as error:
+                print(f"Can't insert many into SeekerSkillSets table in the database!", error)
+                break
+
+        conn.commit()
+        conn.close()
+        cur.close()
+        print("Done insertExperienceDetail")
+        return None
+    
+    def insertPositionSummaryAchievements(self, input_data:List[Dict[str,Any]]):
+        conn, cur = self._get_cursor_and_connection()
+
+        for data in input_data:
+            for k,v in data.items():
+                if isinstance(v,str):
+                    if "'" in v:
+                        data[k] = v.replace("'","''")
+
+        for data in input_data:
+            try:
+                query = """INSERT INTO public."Position_Summary_Achievements" ("ApplyPosition","Summary",
+                                                                                "Achievements", "UserId", 
+                                                                                "IsDeleted") 
+                                        VALUES ('{}','{}','{}',
+                                        (SELECT "Id" FROM public."Users"
+                                        WHERE public."Users"."Id" = '{}'),
+                                        'f');""".format(data["ApplyPosition"],data["Summary"],
+                                                        data["Achievements"], data["UserId"])
+                cur.execute(query)
+                
+            except (psycopg2.DatabaseError, Exception) as error:
+                print(f"Can't insert many into Position_Summary_Achievements table \
+                      in the database!", error)
+                break
+            
+        conn.commit()
+        conn.close()
+        cur.close()
+        print("Done insertPositionSummaryAchievements")
+        return None
+
+    def _get_Post_User(self, 
+                       post_return_ratio:float = 0.3, 
+                       user_return_ratio: float = 1.0
+                       )->Tuple[List[int]]:
+        conn, cur = self._get_cursor_and_connection()
+        # get list available jobpost_id and user_id
+        ini_query = """SELECT "Id" FROM public."{}" """
+
+        ID_dict = {}
+        for tabel_name in ["JobPosts", "Users"]:
+            try:
+                cur.execute(ini_query.format(tabel_name))
+                id_list = cur.fetchall()
+                ID_dict[tabel_name] = [id[0] for id in id_list]
+
+            except (psycopg2.DatabaseError, Exception) as error:
+                print(f"Can't select {tabel_name} table in the database!", error)
+                break
+        conn.commit()
+        conn.close()
+        cur.close()
+
+        jobpost_ids = random.sample(ID_dict['JobPosts'], 
+                                    k= int(len(ID_dict['JobPosts'])*post_return_ratio))
+        
+        user_ids = random.sample(ID_dict['Users'], 
+                                k= int(len(ID_dict['Users'])*user_return_ratio))
+
+        return jobpost_ids, user_ids
 
 
-# def insertSeekerSkillSet():
-#     {
-#         "Id":,
-#         "ProficiencyLevel":,
-#         "UserId":,
-#         "SkillSetId":,
-#         "CreatedDate":,	
-#         "ModifiedDate":,	
-#         "CreatedBy":,
-#         "ModifiedBy":,	
-#         "IsDeleted":,
-#     }
+    def insertJobPostActivitys(self, num_connections: int = 3000):
+        jobpost_ids, user_ids = self._get_Post_User()
 
-# def insertJobPostActivitys():
-#     {
-#         "Id"	
-#         "ApplicationDate"	
-#         "Status"	
-#         "UserId"	
-#         "JobPostId"	
-#         "CvId"	
-#         "CreatedDate"	
-#         "ModifiedDate"	
-#         "CreatedBy"	
-#         "ModifiedBy"	
-#         "IsDeleted"
-#     }
+        user_post = [(datetime.now() + timedelta(days= 45),
+                      3,
+                      random.choice(user_ids), 
+                      random.choice(jobpost_ids),
+                      'f') 
+                    for _ in range(num_connections)
+        ]
+
+        # insert
+        conn, cur = self._get_cursor_and_connection()
+        try:
+            query = """INSERT INTO public."JobPostActivitys" ("ApplicationDate","Status",
+                                                                            "UserId", "JobPostId",
+                                                                            "IsDeleted")
+                                    VALUES (%s,%s,%s,%s,%s);"""
+            cur.executemany(query, user_post)
+            conn.commit()
+            conn.close()
+            cur.close()
+            print("Done insertJobPostActivitys")
+
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't insert many into Position_Summary_Achievements table in the database!", error)
+        return None
+

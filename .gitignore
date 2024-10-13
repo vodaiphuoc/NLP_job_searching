@@ -5,6 +5,7 @@ demo_data/livecareer_resume_dataset/data/*
 demo_data/livecareer_resume_dataset/*.csv
 demo_data/linkedjobs/*/*
 demo_data/linkedjobs/*.csv
+demo_data/ResumesJsonAnnotated/*.json
 *.pdf
 *.png
 */__pycache__/

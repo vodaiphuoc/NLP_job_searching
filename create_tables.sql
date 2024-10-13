@@ -4,8 +4,8 @@ CREATE SCHEMA public;
 CREATE TABLE public."Users" (
   "Id"  SERIAL NOT NULL,
   "UserName" text NOT NULL,
-  "PasswordHash" bytea NOT NULL,
-  "PasswordSalt" bytea NOT NULL,
+  "PasswordHash" bytea  NULL, -- NOT NULL TO NULL
+  "PasswordSalt" bytea  NULL, -- NOT NULL TO NULL
   "FirstName" text NULL,
   "LastName" text NULL,
   "Email" text NULL,
@@ -35,9 +35,10 @@ ALTER TABLE public."SkillSets" ADD CONSTRAINT "PK_SkillSets" PRIMARY KEY ("Id");
 
 CREATE TABLE public."SeekerSkillSets" (
   "Id" SERIAL NOT NULL,
-  "ProficiencyLevel" text NOT NULL, -- will have " " value
+  "ProficiencyLevel" text NOT NULL, -- will have "1" value since the field no meaning
   "UserId" integer NOT NULL,
-  "SkillSetId" integer NOT NULL,
+  "SkillDescription" text NOT NULL, -- Temporary value
+  "SkillSetId" integer NULL, -- FROM NOT NULL TO NULL
   "CreatedDate" timestamp with time zone NULL,
   "ModifiedDate" timestamp with time zone NULL,
   "CreatedBy" uuid NULL,
@@ -130,6 +131,21 @@ CREATE TABLE public."JobLocations" (
 );
 ALTER TABLE public."JobLocations" ADD CONSTRAINT "PK_JobLocations" PRIMARY KEY ("Id");
 
+
+CREATE TABLE public."Position_Summary_Achievements" (
+  "Id" SERIAL NOT NULL,
+  "ApplyPosition" text NOT NULL, -- add 'Apply Position' to compare with JobPosts's JobTitle
+  "Summary" text NOT NULL,
+  "Achievements" text NULL, -- should be moved to 
+  "UserId" integer NULL,
+  "CreatedDate" timestamp with time zone NULL,
+  "ModifiedDate" timestamp with time zone NULL,
+  "CreatedBy" uuid NULL,
+  "ModifiedBy" uuid NULL,
+  "IsDeleted" boolean NOT NULL
+);
+ALTER TABLE public."Position_Summary_Achievements" ADD CONSTRAINT "PK_Position_Summary_Achievements" PRIMARY KEY ("Id");
+
 CREATE TABLE public."ExperienceDetails" (
   "Id" SERIAL NOT NULL,
   "CompanyName" text NOT NULL,
@@ -137,7 +153,7 @@ CREATE TABLE public."ExperienceDetails" (
   "StartDate" timestamp with time zone NOT NULL,
   "EndDate" timestamp with time zone NOT NULL,
   "Responsibilities" text NOT NULL,
-  "Achievements" text NOT NULL,
+  "Achievements" text NULL, -- should be moved to 'Summary_Position_Achievements' table
   "UserId" integer NULL,
   "CreatedDate" timestamp with time zone NULL,
   "ModifiedDate" timestamp with time zone NULL,
@@ -146,6 +162,19 @@ CREATE TABLE public."ExperienceDetails" (
   "IsDeleted" boolean NOT NULL
 );
 ALTER TABLE public."ExperienceDetails" ADD CONSTRAINT "PK_ExperienceDetails" PRIMARY KEY ("Id");
+
+CREATE TABLE public."TempEducationDetails" (
+  "Id" SERIAL NOT NULL,
+  "Description" text NOT NULL,
+  "UserId" integer NOT NULL,
+  "CreatedDate" timestamp with time zone NULL,
+  "ModifiedDate" timestamp with time zone NULL,
+  "CreatedBy" uuid NULL,
+  "ModifiedBy" uuid NULL,
+  "IsDeleted" boolean NOT NULL
+);
+ALTER TABLE public."TempEducationDetails" ADD CONSTRAINT "PK_TempEducationDetails" PRIMARY KEY ("Id");
+
 
 CREATE TABLE public."EducationDetails" (
   "Id" SERIAL NOT NULL,
@@ -219,10 +248,12 @@ ALTER TABLE "JobSkillSets"
 ALTER TABLE "JobSkillSets" 
   ADD CONSTRAINT "fk_JobSkillSet_SkillSet" FOREIGN KEY ("SkillSetId") REFERENCES "SkillSets" ("Id");
 
-ALTER TABLE "SeekerSkillSets" 
+ALTER TABLE "SeekerSkillSets"
   ADD CONSTRAINT "fk_SeekerSkillSet_User" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id");
-ALTER TABLE "SeekerSkillSets" 
-  ADD CONSTRAINT "fk_SeekerSkillSet_SkillSet" FOREIGN KEY ("SkillSetId") REFERENCES "SkillSets" ("Id");
+
+-- Should relax this constraints since skill of seeker not match with jobskillset's format
+--ALTER TABLE "SeekerSkillSets" 
+  --ADD CONSTRAINT "fk_SeekerSkillSet_SkillSet" FOREIGN KEY ("SkillSetId") REFERENCES "SkillSets" ("Id");
 
 ALTER TABLE "Companys" 
   ADD CONSTRAINT "fk_Company_BusStream" FOREIGN KEY ("BusinessStreamId") REFERENCES "BusinessStreams" ("Id");
@@ -239,6 +270,10 @@ ALTER TABLE "Reviews"
 ALTER TABLE "Reviews" 
   ADD CONSTRAINT "fk_Reviews_Company" FOREIGN KEY ("CompanyId") REFERENCES "Companys" ("Id");
 
+-- add this foreign key for new table
+ALTER TABLE "Position_Summary_Achievements" 
+  ADD CONSTRAINT "FK_Position_Summary_Achievements_User" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id");
+
 ALTER TABLE "ExperienceDetails" 
   ADD CONSTRAINT "FK_ExperienceDetail_User" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id");
 
@@ -247,6 +282,10 @@ ALTER TABLE "CVs"
 
 ALTER TABLE "EducationDetails" 
   ADD CONSTRAINT "fk_EducationDetail_User" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id");
+
+-- add a Temporaral table for demo
+ALTER TABLE "TempEducationDetails" 
+  ADD CONSTRAINT "fk_TempEducationDetails" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id");
 
 ALTER TABLE "Users" 
   ADD CONSTRAINT "fk_User_Company" FOREIGN KEY ("CompanyId") REFERENCES "Companys" ("Id");

@@ -121,6 +121,7 @@ def create(field_name:str, unique_values: List[str]):
 
 - **Initialize Resume dataset**: source: https://www.kaggle.com/datasets/snehaanbhawal/resume-dataset
 - **Initialize Job Posts dataset**: source https://www.kaggle.com/datasets/ravindrasinghrana/job-description-dataset
+- **Initialize JSON Resume dataset**: https://huggingface.co/datasets/Mehyaar/Annotated_NER_PDF_Resumes
 
 - **Project processes**:
 	1) With **Admin** role: training/fine-tuning the model
@@ -169,3 +170,5 @@ input
 userID + cv_id
 
 -> top-k 5 jobpost_id
+
+
