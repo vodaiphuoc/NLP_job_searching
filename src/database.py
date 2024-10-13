@@ -132,6 +132,7 @@ class Query2MainDB(DB_Handling_Base):
             
             cur.execute(resume_query)
             resume_data = cur.fetchall()
+            assert len(resume_data) == 1, f"Found length {len(resume_data)}, UserId: {user_id}"
         
         except (psycopg2.DatabaseError, Exception) as error:
             print(f"Can't select for resume. Error: {error}")
@@ -189,12 +190,14 @@ class Query2MainDB(DB_Handling_Base):
     def get_available_activity(self)->Union[bool, List[Dict[str,int]]]:
         conn, cur = self._get_cursor_and_connection()
         # get list available jobpost_id and user_id
-        activity_query = """SELECT "UserId", "JobPostId" FROM public."JobPostActivitys" """
+        activity_query = """SELECT "Id", "UserId", "JobPostId" FROM public."JobPostActivitys" """
         try:
             cur.execute(activity_query)
             pair_id_list = cur.fetchall()
-            pair_id_list = [{'UserId':int(id[0]), 
-                             'JobPostId': int(id[1])} 
+            pair_id_list = [{'Id': int(id[0]), 
+                            'UserId':int(id[1]), 
+                             'JobPostId': int(id[2])
+                             } 
                              for id in pair_id_list
                              ]
             conn.commit()
@@ -204,6 +207,27 @@ class Query2MainDB(DB_Handling_Base):
         except (psycopg2.DatabaseError, Exception) as error:
             print(f"Can't select JobPostActivitys table in the database!", error)
             return False
+        
+    def update_score2table(self, update_data: List[Dict[str,Union[int,float]]]):
+        conn, cur = self._get_cursor_and_connection()
+        # get list available jobpost_id and user_id
+        update_data = [(each_data_['Score'], each_data_['Id']) 
+                       for each_data_ in update_data
+                       ]
+        update_query = """UPDATE  public."JobPostActivitys"
+                            SET public."JobPostActivitys"."score" = %s
+                            WHERE public."JobPostActivitys"."Id" = %s
+                        """
+        try:
+            cur.executemany(update_query)
+            
+        except (psycopg2.DatabaseError, Exception) as error:
+            print(f"Can't update JobPostActivitys's score column in the database!", error)
+            
+        conn.commit()
+        conn.close()
+        cur.close()
+
 
 class InsertMany2MainDB(DB_Handling_Base):
     def __init__(self,
@@ -545,7 +569,7 @@ class InsertMany2MainDB(DB_Handling_Base):
                                         WHERE public."Users"."Id" = '{}'),
                                         '{}',
                                         'f');""".format(data["UserId"], 
-                                                        data["SkillDescription"].replace("'","''")
+                                                        data["SkillDescription"]
                                                         )
                 cur.execute(query)
                 
@@ -556,7 +580,7 @@ class InsertMany2MainDB(DB_Handling_Base):
         conn.commit()
         conn.close()
         cur.close()
-        print("Done insertExperienceDetail")
+        print("Done SeekerSkillSets")
         return None
     
     def insertPositionSummaryAchievements(self, input_data:List[Dict[str,Any]]):

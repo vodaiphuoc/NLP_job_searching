@@ -1,6 +1,6 @@
 myenv/
 env/
-test*.*
+*test*.*
 demo_data/livecareer_resume_dataset/data/*
 demo_data/livecareer_resume_dataset/*.csv
 demo_data/linkedjobs/*/*
@@ -11,3 +11,5 @@ demo_data/ResumesJsonAnnotated/*.json
 */__pycache__/
 docs/
 colum_csv/
+legacy/
+*.zip

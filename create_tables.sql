@@ -107,6 +107,7 @@ CREATE TABLE public."JobPostActivitys" (
   "UserId" integer NULL,
   "JobPostId" integer NULL,
   "CvId" integer NULL,
+  "Score" float NULL,
   "CreatedDate" timestamp with time zone NULL,
   "ModifiedDate" timestamp with time zone NULL,
   "CreatedBy" uuid NULL,

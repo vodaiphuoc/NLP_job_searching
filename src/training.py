@@ -28,8 +28,9 @@ class Database2Dataset(torch.utils.data.Dataset):
         query_data = self.db_handling.query(jobpost_id= current_ids['JobPostId'],
                                             user_id=current_ids['UserId'])
 
-        return (current_ids['UserId'], 
-                current_ids['JobPostId'],
+        return (current_ids['Id'], 
+                # current_ids['UserId'], 
+                # current_ids['JobPostId'],
                 query_data['resume'],
                 query_data['jobpost']
             )
@@ -48,7 +49,6 @@ class Action_base(object):
             self.model = SentenceTransformer(model_name)
         else:
             raise NotImplemented
-        # create connection to DB
 
 class Compute_Assign_Score(Action_base):
     def __init__(self,
@@ -64,11 +64,13 @@ class Compute_Assign_Score(Action_base):
         dataset = Database2Dataset(db_config_file_path, section)
         self.loader = torch.utils.data.DataLoader(dataset, batch_size = batch_size)
         self.batch_size = batch_size
+        self.db_config_file_path = db_config_file_path
+        self.section = section
 
     def compute_and_assign_score(self):
         score_output: List[Dict[str,Union[int,float]]] = []
 
-        for batch_userId, batch_jobpostId, batch_resume, batch_jobpost in self.loader:
+        for batchId, batch_resume, batch_jobpost in self.loader:
             # Compute embeddings for both lists
             resume_embeddings = self.model.encode(batch_resume)
             jobpost_embeddings = self.model.encode(batch_jobpost)
@@ -78,11 +80,13 @@ class Compute_Assign_Score(Action_base):
             assert similarities.shape[0] == self.batch_size, similarities.shape[1] == self.batch_size
             
             
-            batch_score= [{'UserId':batch_userId[idx],
-                 'JobPostId': batch_jobpostId[idx],
+            batch_score= [{'Id':batchId[idx],
                  'Score': similarities[idx][idx]
                  } for idx in range(self.batch_size)]
 
             score_output.extend(batch_score)
         
-        
+        # update score
+        db_handling = Query2MainDB(config_file_path=self.config_file_path, 
+                                  section= self.section)
+        db_handling.update_score2table(update_data= score_output)
