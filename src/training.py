@@ -47,7 +47,20 @@ class Action_base(object):
         else:
             raise NotImplemented
 
+# class Fine_tuning(Action_base):
+#     def __init__(self, runing_mode: Literal['demo'] | Literal['production'], model_type: Literal['pretrained'] | Literal['fine_tuning'], model_name: str = "all-MiniLM-L6-v2") -> None:
+#         super().__init__(runing_mode, model_type, model_name)
+
+
+
+
 class Compute_Assign_Score(Action_base):
+    """Compute Consine similarity score 
+    between a jobpost and user's resume
+    similarity socre range from 0 to 1
+    near 1 indicates high similarity
+    near 0 indicates very low similarity
+    """
     def __init__(self,
                  runing_mode: str,
                  model_type: str,
