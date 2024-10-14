@@ -5,13 +5,6 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 import random
 
-TABLE_NAMES = Literal["Users", "SkillSets", "SeekerSkillSets", "JobTypes",
-                    "JobSkillSets", "JobPosts", "JobPostActivitys", "JobLocations", 
-                    "Position_Summary_Achievements", "ExperienceDetails",
-                    "TempEducationDetails", "Companys"
-                    ]
-    
-
 class DB_Handling_Base(object):
     def __init__(self, 
                  config_file_path: str = "src/db.ini", 
@@ -43,6 +36,7 @@ class DB_Handling_Base(object):
         return conn, cur
 
 class Query2MainDB(DB_Handling_Base):
+    """For interacting with DB when training or inference"""
     def __init__(self, 
                  config_file_path: str = "src/db.ini", 
                  section: str = "local") -> None:
@@ -214,7 +208,7 @@ class Query2MainDB(DB_Handling_Base):
         update_data = [(each_data_['Score'], each_data_['Id']) 
                        for each_data_ in update_data
                        ]
-        update_query = """UPDATE  public."JobPostActivitys"
+        update_query = """UPDATE public."JobPostActivitys"
                             SET public."JobPostActivitys"."score" = %s
                             WHERE public."JobPostActivitys"."Id" = %s
                         """
@@ -229,7 +223,7 @@ class Query2MainDB(DB_Handling_Base):
         cur.close()
 
 
-class InsertMany2MainDB(DB_Handling_Base):
+class InsertDEMO2MainDB(DB_Handling_Base):
     def __init__(self,
                  config_file_path: str = "src/db.ini", 
                  section: str = "local"
@@ -468,7 +462,7 @@ class InsertMany2MainDB(DB_Handling_Base):
         return None
 
 
-# # related to Resume
+    # related to Resume
     def insertUsers(self, input_data: List[str]):
         """
         Role value is equal 2 for who post CV
@@ -646,7 +640,7 @@ class InsertMany2MainDB(DB_Handling_Base):
         return jobpost_ids, user_ids
 
 
-    def insertJobPostActivitys(self, num_connections: int = 3000):
+    def insertJobPostActivitys(self, num_connections: int = 1000):
         jobpost_ids, user_ids = self._get_Post_User()
 
         user_post = [(datetime.now() + timedelta(days= 45),

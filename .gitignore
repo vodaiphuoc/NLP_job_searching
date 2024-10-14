@@ -13,3 +13,5 @@ docs/
 colum_csv/
 legacy/
 *.zip
+data/
+*.csv

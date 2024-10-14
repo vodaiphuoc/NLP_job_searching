@@ -1,9 +1,8 @@
 from sentence_transformers import SentenceTransformer
 from typing import Literal, Dict, List, Union
-
+from tqdm import tqdm
 import torch.utils
 from src.database import Query2MainDB
-import pandas as pd
 import torch
 
 class Database2Dataset(torch.utils.data.Dataset):
@@ -24,13 +23,11 @@ class Database2Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index:int)->tuple[int,str]:
         current_ids = self.id_pairs[index]
-    
+
         query_data = self.db_handling.query(jobpost_id= current_ids['JobPostId'],
                                             user_id=current_ids['UserId'])
 
-        return (current_ids['Id'], 
-                # current_ids['UserId'], 
-                # current_ids['JobPostId'],
+        return (current_ids['Id'],
                 query_data['resume'],
                 query_data['jobpost']
             )
@@ -55,7 +52,7 @@ class Compute_Assign_Score(Action_base):
                  runing_mode: str,
                  model_type: str,
                  model_name: str,
-                 db_config_file_path:str, 
+                 db_config_file_path:str,
                  section: str,
                  batch_size:int,
                  ) -> None:
@@ -70,7 +67,7 @@ class Compute_Assign_Score(Action_base):
     def compute_and_assign_score(self):
         score_output: List[Dict[str,Union[int,float]]] = []
 
-        for batchId, batch_resume, batch_jobpost in self.loader:
+        for batchId, batch_resume, batch_jobpost in tqdm(self.loader, total= len(self.loader)):
             # Compute embeddings for both lists
             resume_embeddings = self.model.encode(batch_resume)
             jobpost_embeddings = self.model.encode(batch_jobpost)
@@ -81,8 +78,10 @@ class Compute_Assign_Score(Action_base):
             
             
             batch_score= [{'Id':batchId[idx],
-                 'Score': similarities[idx][idx]
-                 } for idx in range(self.batch_size)]
+                            'Score': similarities[idx][idx]
+                        } 
+                        for idx in range(self.batch_size)
+                        ]
 
             score_output.extend(batch_score)
         
