@@ -21,7 +21,22 @@
 		- when user input (JobPostID for recruiters or userId for job seekers), perform search in table "Sim_score" table to archive
 		top-k highest similarity score
 
-## psql command
+
+
+## Table list
+"Users", "SkillSets", "SeekerSkillSets, "Reviews", "JobTypes", "JobSkillSets", "JobPosts", "JobPostActivitys", "JobLocations", "ExperienceDetails", "EducationDetails", "Companys", "CVs", "BusinessStreams"
+
+# How to use
+To create all tables, in psql run command:
+\i path_to_create_tables.sql
+[Optional] To clear all tables in the database, in psql:
+DROP SCHEMA public CASCADE;
+To insert demo data into the database, run:
+python insert.py
+To get similarity score, run:
+python single_run.py
+
+## Ref psql command
 1) \? list all the commands
 2) \l list databases
 3) \conninfo display information about current connection
@@ -31,14 +46,3 @@
 7) \dt *.* list tables of all schemas
 8) Then you can run SQL statements, e.g., SELECT * FROM my_table;(Note: a statement must be terminated with semicolon ;)
 9) \q quit psql
-
-
-## Table list
-"Users", "SkillSets", "SeekerSkillSets, "Reviews", "JobTypes", "JobSkillSets", "JobPosts", "JobPostActivitys", "JobLocations", "ExperienceDetails", "EducationDetails", "Companys", "CVs", "BusinessStreams"
-
-To create all tables, in psql run command:
-\i path_to_create_tables.sql
-[Optional] To clear all tables in the database, in psql:
-DROP SCHEMA public CASCADE;
-To insert demo data into the database, run:
-python insert.py

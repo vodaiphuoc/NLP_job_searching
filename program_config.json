@@ -4,5 +4,5 @@
     "model_name": "all-MiniLM-L6-v2",
     "db_config_file_path":"src/db.ini",
     "section": "local",
-    "batch_size": 8
+    "batch_size": 32
 }

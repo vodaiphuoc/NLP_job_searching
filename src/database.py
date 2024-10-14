@@ -208,20 +208,18 @@ class Query2MainDB(DB_Handling_Base):
         update_data = [(each_data_['Score'], each_data_['Id']) 
                        for each_data_ in update_data
                        ]
-        update_query = """UPDATE public."JobPostActivitys"
-                            SET public."JobPostActivitys"."score" = %s
-                            WHERE public."JobPostActivitys"."Id" = %s
-                        """
+        
+        update_query = """UPDATE public."JobPostActivitys" SET "Score" = %s WHERE "Id" = %s"""
         try:
-            cur.executemany(update_query)
+            cur.executemany(update_query,update_data)
+            conn.commit()
+            conn.close()
+            cur.close()
+            return True
             
         except (psycopg2.DatabaseError, Exception) as error:
             print(f"Can't update JobPostActivitys's score column in the database!", error)
-            
-        conn.commit()
-        conn.close()
-        cur.close()
-
+            return False
 
 class InsertDEMO2MainDB(DB_Handling_Base):
     def __init__(self,
@@ -276,7 +274,8 @@ class InsertDEMO2MainDB(DB_Handling_Base):
                                                             "BusinessStreamId", "IsDeleted")
                         VALUES ('{}', 'empty','{}', 2010,'{}','{}', 'empty', '{}',
                                 (SELECT "Id" FROM public."BusinessStreams" 
-                                WHERE public."BusinessStreams"."BusinessStreamName" = '{}')
+                                WHERE public."BusinessStreams"."BusinessStreamName" = '{}'
+                                LIMIT 1)
                                 ,'f');""".format(data["company_name"], data["Website"],
                                         data["State"],data["City"],
                                         data["Company Size"],data["Industry"])
@@ -640,7 +639,11 @@ class InsertDEMO2MainDB(DB_Handling_Base):
         return jobpost_ids, user_ids
 
 
-    def insertJobPostActivitys(self, num_connections: int = 1000):
+    def insertJobPostActivitys(self, num_connections: int = 100):
+        """
+        Simulate the number conneciton between jobposts and users
+        with 'num_connections'
+        """
         jobpost_ids, user_ids = self._get_Post_User()
 
         user_post = [(datetime.now() + timedelta(days= 45),

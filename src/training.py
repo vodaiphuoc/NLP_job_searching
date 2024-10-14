@@ -59,7 +59,7 @@ class Compute_Assign_Score(Action_base):
         super().__init__(runing_mode, model_type, model_name)
 
         dataset = Database2Dataset(db_config_file_path, section)
-        self.loader = torch.utils.data.DataLoader(dataset, batch_size = batch_size)
+        self.loader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, drop_last = False)
         self.batch_size = batch_size
         self.db_config_file_path = db_config_file_path
         self.section = section
@@ -69,23 +69,29 @@ class Compute_Assign_Score(Action_base):
 
         for batchId, batch_resume, batch_jobpost in tqdm(self.loader, total= len(self.loader)):
             # Compute embeddings for both lists
+            
             resume_embeddings = self.model.encode(batch_resume)
             jobpost_embeddings = self.model.encode(batch_jobpost)
-
+            
             # Compute cosine similarities
             similarities = self.model.similarity(resume_embeddings, jobpost_embeddings)
-            assert similarities.shape[0] == self.batch_size, similarities.shape[1] == self.batch_size
+            assert similarities.shape[0] == batchId.shape[0] \
+                    and similarities.shape[1] == batchId.shape[0], f"Found\
+                {similarities.shape} vs {batchId.shape}"
             
-            
-            batch_score= [{'Id':batchId[idx],
-                            'Score': similarities[idx][idx]
+            batch_score= [{'Id':batchId[idx].item(),
+                            'Score': similarities[idx][idx].item()
                         } 
-                        for idx in range(self.batch_size)
+                        for idx in range(batchId.shape[0])
                         ]
 
             score_output.extend(batch_score)
         
         # update score
-        db_handling = Query2MainDB(config_file_path=self.config_file_path, 
+        db_handling = Query2MainDB(config_file_path=self.db_config_file_path, 
                                   section= self.section)
-        db_handling.update_score2table(update_data= score_output)
+        status = db_handling.update_score2table(update_data= score_output)
+        if status:
+            print("Done")
+        else:
+            print("False to assign score")

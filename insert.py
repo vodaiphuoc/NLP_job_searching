@@ -5,7 +5,7 @@ db = InsertDEMO2MainDB()
 
 # config paths
 linkedjobs_folder_path = pathlib.Path("demo_data","linkedjobs","cleaned_data")
-lvcr_resume_folder_path = pathlib.Path("demo_data,livecareer_resume_dataset,cleaned_data")
+lvcr_resume_folder_path = pathlib.Path("demo_data","livecareer_resume_dataset","cleaned_data")
 
 bus_stream_path = pathlib.Path(linkedjobs_folder_path,"busniess_steam.csv")
 comp_data_path = pathlib.Path(linkedjobs_folder_path,"company_data.csv")
@@ -15,11 +15,11 @@ jobposts_path = pathlib.Path(linkedjobs_folder_path,"JobPosts.csv")
 jobskillsets_path = pathlib.Path(linkedjobs_folder_path,"JobSkillSets.csv") 
 
 
-users_path = pathlib.Path(linkedjobs_folder_path,"Users_table.csv")
-edu_detail_path = pathlib.Path(linkedjobs_folder_path,"TempEducationDetails_table.csv")
-exp_detail_path = pathlib.Path(linkedjobs_folder_path,"ExperienceDetail_table.csv")
-seeker_skills_path = pathlib.Path(linkedjobs_folder_path,"SeekerSkills_table.csv")
-psa_path = pathlib.Path(linkedjobs_folder_path,"Position_Summary_Achievements_table.csv")
+users_path = pathlib.Path(lvcr_resume_folder_path,"Users_table.csv")
+edu_detail_path = pathlib.Path(lvcr_resume_folder_path,"TempEducationDetails_table.csv")
+exp_detail_path = pathlib.Path(lvcr_resume_folder_path,"ExperienceDetail_table.csv")
+seeker_skills_path = pathlib.Path(lvcr_resume_folder_path,"SeekerSkills_table.csv")
+psa_path = pathlib.Path(lvcr_resume_folder_path,"Position_Summary_Achievements_table.csv")
 
 
 # insert processes
